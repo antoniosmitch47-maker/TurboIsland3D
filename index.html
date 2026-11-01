@@ -1,176 +1,28 @@
-<!doctype html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<meta name="theme-color" content="#071b2b">
-<title>Turbo Island 3D</title>
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><meta name="theme-color" content="#102a3a"><title>Turbo Island 3D v0.2</title>
 <style>
-  *{box-sizing:border-box}
-  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071b2b;font-family:Arial,sans-serif;touch-action:none}
-  #game{position:fixed;inset:0}
-  canvas{display:block;width:100%;height:100%}
-  #hud{position:absolute;inset:0;pointer-events:none;color:#fff;text-shadow:0 2px 4px #001}
-  .top{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
-  .panel{background:#061827c9;border:1px solid #ffffff35;border-radius:13px;padding:8px 12px;backdrop-filter:blur(5px);font-weight:700}
-  #speed{font-size:22px} #speed small{font-size:10px;color:#b9e9ff}
-  #lap{font-size:14px;text-align:right}
-  #message{position:absolute;top:23%;left:50%;transform:translateX(-50%);font-size:clamp(22px,6vw,38px);font-weight:900;text-align:center;white-space:nowrap;color:#fff}
-  #controls{position:absolute;left:0;right:0;bottom:18px;display:flex;justify-content:space-between;align-items:flex-end;padding:0 18px;pointer-events:auto}
-  .steer{display:flex;gap:12px}
-  .control{width:66px;height:66px;border-radius:50%;border:2px solid #ffffffa0;background:#092b45c9;color:white;font-size:27px;font-weight:bold;box-shadow:0 4px 12px #0007;touch-action:none;user-select:none}
-  .pedals{display:flex;gap:10px;align-items:flex-end}
-  #gas{width:76px;height:82px;background:#087d45e8;font-size:15px}
-  #brake{width:64px;height:65px;background:#a52b2be8;font-size:12px}
-  #start{position:absolute;pointer-events:auto;left:50%;top:55%;transform:translate(-50%,-50%);border:0;border-radius:16px;padding:15px 28px;background:#ffb52e;color:#17202a;font-size:20px;font-weight:900;box-shadow:0 5px 0 #a86a0c}
-  #hint{position:absolute;bottom:110px;left:0;right:0;text-align:center;font-size:12px;color:#e6f8ffb9}
-  @media (max-height:430px){.control{width:54px;height:54px}#gas{height:64px}#controls{bottom:8px}.top{top:6px}}
-</style>
-</head>
-<body>
-<div id="game"></div>
-<div id="hud">
-  <div class="top">
-    <div class="panel" id="speed">0 <small>KM/H</small></div>
-    <div class="panel" id="lap">VUELTA 1 / 3<br>POSICIÓN 1 / 3</div>
-  </div>
-  <div id="message">TURBO ISLAND 3D</div>
-  <div id="hint">Mantén pulsado acelerar y usa ◀ ▶ para girar</div>
-  <button id="start">INICIAR CARRERA</button>
-  <div id="controls">
-    <div class="steer">
-      <button class="control" id="left">◀</button>
-      <button class="control" id="right">▶</button>
-    </div>
-    <div class="pedals">
-      <button class="control" id="brake">FRENO</button>
-      <button class="control" id="gas">ACELERAR</button>
-    </div>
-  </div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-<script>
-(() => {
-  const root=document.getElementById('game');
-  const message=document.getElementById('message'), startBtn=document.getElementById('start');
-  const speedEl=document.getElementById('speed'), lapEl=document.getElementById('lap');
-  if(!window.THREE){message.textContent='No se pudo cargar el motor 3D';startBtn.style.display='none';return;}
-  const scene=new THREE.Scene();
-  scene.background=new THREE.Color(0x78d5ef);
-  scene.fog=new THREE.Fog(0x78d5ef,55,190);
-  const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,350);
-  const renderer=new THREE.WebGLRenderer({antialias:true});
-  renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));
-  renderer.setSize(innerWidth,innerHeight);
-  renderer.shadowMap.enabled=true;
-  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-  root.appendChild(renderer.domElement);
-  scene.add(new THREE.HemisphereLight(0xdff8ff,0x52713d,2.0));
-  const sun=new THREE.DirectionalLight(0xffffff,2.0);sun.position.set(-35,55,20);sun.castShadow=true;scene.add(sun);
-
-  const mat=(c,rough=.85)=>new THREE.MeshStandardMaterial({color:c,roughness:rough});
-  const grass=mat(0x49a94c), road=mat(0x343b42), edge=mat(0xf4e6c8), yellow=mat(0xffc72c);
-  const sea= new THREE.Mesh(new THREE.PlaneGeometry(500,500),mat(0x23a9c4));sea.rotation.x=-Math.PI/2;sea.position.y=-.16;scene.add(sea);
-  const island=new THREE.Mesh(new THREE.CircleGeometry(91,96),grass);island.rotation.x=-Math.PI/2;island.position.y=-.08;scene.add(island);
-
-  // Oval circuit, with a broad, easy-to-follow road.
-  const R=43, r=27, N=180;
-  const points=[];
-  for(let i=0;i<N;i++){const a=i/N*Math.PI*2;points.push(new THREE.Vector3(Math.cos(a)*R,0,Math.sin(a)*r));}
-  const curve=new THREE.CatmullRomCurve3(points,true,'catmullrom',.15);
-  const roadPts=curve.getPoints(360);
-  const roadGeo=new THREE.BufferGeometry();
-  const verts=[],uv=[],indices=[];
-  for(let i=0;i<roadPts.length;i++){
-    const p=roadPts[i],t=curve.getTangent(i/(roadPts.length-1)).normalize();
-    const side=new THREE.Vector3(-t.z,0,t.x);
-    for(const s of [-1,1]){const v=p.clone().addScaledVector(side,s*8);v.y=.03;verts.push(v.x,v.y,v.z);uv.push(i/roadPts.length,s);}
-    if(i<roadPts.length-1){let k=i*2;indices.push(k,k+1,k+2,k+1,k+3,k+2);}
-  }
-  roadGeo.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));roadGeo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));roadGeo.setIndex(indices);roadGeo.computeVertexNormals();
-  const roadMesh=new THREE.Mesh(roadGeo,road);roadMesh.receiveShadow=true;scene.add(roadMesh);
-  // Roadside curbs and dashed center markers
-  for(let i=0;i<roadPts.length;i+=5){
-    const p=roadPts[i],t=curve.getTangent(i/360).normalize(),side=new THREE.Vector3(-t.z,0,t.x);
-    for(const s of [-1,1]){
-      const curb=new THREE.Mesh(new THREE.BoxGeometry(2.1,.22,.55),i%10===0?mat(0xffffff):mat(0xe94b3c));
-      curb.position.copy(p).addScaledVector(side,s*8.15);curb.position.y=.2;curb.rotation.y=Math.atan2(t.x,t.z);scene.add(curb);
-    }
-  }
-  // Start/finish stripe across the track
-  const startP=curve.getPoint(0), startT=curve.getTangent(0);
-  const stripe=new THREE.Mesh(new THREE.BoxGeometry(1.5,.08,15.5),edge);
-  stripe.position.set(startP.x,.13,startP.z);stripe.rotation.y=Math.atan2(startT.x,startT.z);scene.add(stripe);
-
-  // Palm trees, rocks and small tropical decorations.
-  function palm(x,z,scale=1){
-    const group=new THREE.Group();group.position.set(x,0,z);group.scale.setScalar(scale);
-    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.22,.38,5,7),mat(0x93602e));trunk.position.y=2.5;trunk.rotation.z=.08;trunk.castShadow=true;group.add(trunk);
-    for(let i=0;i<7;i++){const a=i*Math.PI*2/7;const leaf=new THREE.Mesh(new THREE.ConeGeometry(.48,4.1,5),mat(i%2?0x168b48:0x29a957));leaf.position.set(Math.cos(a)*1.35,4.7+Math.sin(a)*.35,Math.sin(a)*1.35);leaf.rotation.z=-Math.cos(a)*.8;leaf.rotation.x=Math.sin(a)*.8;leaf.castShadow=true;group.add(leaf);}
-    scene.add(group);
-  }
-  for(let i=0;i<46;i++){const a=i/46*Math.PI*2;const rad=56+(i%3)*5;palm(Math.cos(a)*rad,Math.sin(a)*rad*.63,.75+(i%4)*.12);}
-  for(let i=0;i<22;i++){const a=i*2.4,rad=68+(i%4)*4;const rock=new THREE.Mesh(new THREE.DodecahedronGeometry(1.2+(i%3)*.5),mat(0x8c9b83));rock.position.set(Math.cos(a)*rad,.6,Math.sin(a)*rad*.7);rock.castShadow=true;scene.add(rock);}
-
-  function makeCar(color){
-    const g=new THREE.Group();
-    const body=new THREE.Mesh(new THREE.BoxGeometry(2.15,.72,3.5),mat(color,.55));body.position.y=.95;body.castShadow=true;g.add(body);
-    const hood=new THREE.Mesh(new THREE.BoxGeometry(1.85,.3,1.15),mat(color));hood.position.set(0,1.35,-.9);g.add(hood);
-    const cabin=new THREE.Mesh(new THREE.BoxGeometry(1.55,.8,1.45),mat(0x253d50,.35));cabin.position.set(0,1.55,.35);cabin.castShadow=true;g.add(cabin);
-    const roof=new THREE.Mesh(new THREE.BoxGeometry(1.65,.16,1.5),mat(color));roof.position.set(0,2,.35);g.add(roof);
-    for(const x of [-1.12,1.12])for(const z of [-1.1,1.1]){
-      const w=new THREE.Mesh(new THREE.CylinderGeometry(.43,.43,.28,12),mat(0x15191c));w.rotation.z=Math.PI/2;w.position.set(x,.58,z);w.castShadow=true;g.add(w);
-      const hub=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,.3,10),mat(0xb9c4c9));hub.rotation.z=Math.PI/2;hub.position.set(x,.58,z);g.add(hub);
-    }
-    const bumper=new THREE.Mesh(new THREE.BoxGeometry(2.3,.22,.25),mat(0x252b2f));bumper.position.set(0,.68,-1.82);g.add(bumper);
-    return g;
-  }
-  const player=makeCar(0xe53935);scene.add(player);
-  const rivals=[makeCar(0x2879e8),makeCar(0xffd12e)];rivals.forEach(c=>scene.add(c));
-  const keys={left:false,right:false,gas:false,brake:false};
-  function hold(id,key){const el=document.getElementById(id);const on=e=>{e.preventDefault();keys[key]=true;};const off=e=>{e.preventDefault();keys[key]=false;};el.addEventListener('pointerdown',on);['pointerup','pointercancel','pointerleave'].forEach(ev=>el.addEventListener(ev,off));}
-  hold('left','left');hold('right','right');hold('gas','gas');hold('brake','brake');
-  let running=false,progress=0,velocity=0,steer=0,lap=1,elapsed=0;
-  const totalLaps=3;
-  function placeCar(car,p,offset=0){const q=curve.getPointAt(((p%1)+1)%1),t=curve.getTangentAt(((p%1)+1)%1).normalize(),side=new THREE.Vector3(-t.z,0,t.x);car.position.copy(q).addScaledVector(side,offset);car.position.y=.05;car.rotation.y=Math.atan2(t.x,t.z);}
-  placeCar(player,0,0);placeCar(rivals[0],.07,-3);placeCar(rivals[1],.14,3);
-  const clock=new THREE.Clock();
-  function animate(){
-    requestAnimationFrame(animate);
-    const dt=Math.min(clock.getDelta(),.04);
-    if(running){
-      elapsed+=dt;
-      const accel=keys.gas?27:0, braking=keys.brake?38:0;
-      velocity+=accel*dt;velocity-=braking*dt;velocity-=velocity*dt*.72;velocity=THREE.MathUtils.clamp(velocity,0,39);
-      if(keys.left)steer=THREE.MathUtils.damp(steer,-1,5,dt);else if(keys.right)steer=THREE.MathUtils.damp(steer,1,5,dt);else steer=THREE.MathUtils.damp(steer,0,5,dt);
-      progress+=(velocity/Math.max(1,R*2.1))*dt/(Math.PI*2);
-      const lateral=steer*velocity*.075;
-      const p=curve.getPointAt((progress%1+1)%1),t=curve.getTangentAt((progress%1+1)%1).normalize(),side=new THREE.Vector3(-t.z,0,t.x);
-      player.position.copy(p).addScaledVector(side,lateral);player.position.y=.05;
-      player.rotation.y=Math.atan2(t.x,t.z)+steer*.22;
-      // AI racers move steadily around the loop.
-      placeCar(rivals[0],progress+.075+elapsed*.0004,-3);
-      placeCar(rivals[1],progress+.145+elapsed*.00025,3);
-      const newLap=Math.floor(progress)+1;
-      if(newLap>lap){lap=Math.min(newLap,totalLaps);if(lap>totalLaps){running=false;message.textContent='¡CARRERA COMPLETADA!';startBtn.textContent='JUGAR OTRA VEZ';startBtn.style.display='block';}}
-      speedEl.innerHTML=Math.round(velocity*4.1)+' <small>KM/H</small>';
-      lapEl.innerHTML='VUELTA '+Math.min(lap,totalLaps)+' / 3<br>POSICIÓN 1 / 3';
-      message.textContent='';
-    }
-    const forward=new THREE.Vector3(Math.sin(player.rotation.y),0,Math.cos(player.rotation.y));
-    const target=player.position.clone().add(new THREE.Vector3(0,5.5,0)).addScaledVector(forward,-10.5);
-    camera.position.lerp(target,.12);
-    const look=player.position.clone().add(new THREE.Vector3(0,1.2,0)).addScaledVector(forward,5);
-    camera.lookAt(look);
-    renderer.render(scene,camera);
-  }
-  animate();
-  startBtn.addEventListener('click',()=>{
-    progress=0;lap=1;velocity=0;elapsed=0;running=true;startBtn.style.display='none';message.textContent='¡A CORRER!';
-    placeCar(player,0,0);placeCar(rivals[0],.075,-3);placeCar(rivals[1],.145,3);
-  });
-  addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
-})();
-</script>
-</body>
-</html>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#78cbe3;font-family:system-ui,Arial;touch-action:none}#game{position:fixed;inset:0}canvas{display:block;width:100%;height:100%}#hud{position:fixed;inset:0;pointer-events:none;color:white;text-shadow:0 2px 4px #071521}.top{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;gap:8px}.panel{background:#092033d9;border:1px solid #ffffff55;border-radius:12px;padding:8px 12px;font-weight:800}#speed{font-size:21px}#speed small{font-size:10px;color:#b9e7f4}#raceInfo{text-align:right;font-size:13px;line-height:1.45}#message{position:absolute;top:22%;left:50%;transform:translateX(-50%);font-size:clamp(25px,7vw,42px);font-weight:1000;text-align:center;white-space:nowrap}#submessage{position:absolute;top:31%;left:50%;transform:translateX(-50%);font-size:14px;text-align:center;white-space:nowrap}#controls{position:absolute;left:0;right:0;bottom:16px;padding:0 16px;display:flex;justify-content:space-between;align-items:flex-end;pointer-events:auto}.group{display:flex;gap:11px;align-items:flex-end}.control{width:64px;height:64px;border:2px solid #ffffffaa;border-radius:50%;background:#082b43d9;color:white;font-size:27px;font-weight:900;box-shadow:0 4px 12px #0007;touch-action:none;user-select:none}#gas{width:78px;height:82px;border-radius:19px;background:#087b48ed;font-size:14px}#brake{width:64px;height:66px;border-radius:17px;background:#a52e2eed;font-size:12px}#hint{position:absolute;bottom:108px;left:0;right:0;text-align:center;color:#effbff;font-size:11px}#start{position:absolute;top:54%;left:50%;transform:translate(-50%,-50%);pointer-events:auto;border:0;border-radius:14px;padding:15px 25px;background:#ffc247;color:#17232a;font-size:18px;font-weight:1000;box-shadow:0 5px 0 #a66d16}@media(max-height:440px){.control{width:53px;height:53px}#gas{height:65px}#controls{bottom:7px}#hint{bottom:75px}.top{top:5px}}
+</style></head><body><div id="game"></div><div id="hud"><div class="top"><div class="panel" id="speed">0 <small>KM/H</small></div><div class="panel" id="raceInfo">VUELTA 1 / 3<br>POSICIÓN 1 / 3</div></div><div id="message">TURBO ISLAND 3D</div><div id="submessage">EDICIÓN 0.2 · CARRERA ARCADE</div><div id="hint">Mantén pulsado acelerar · ◀ izquierda · derecha ▶</div><button id="start">INICIAR CARRERA</button><div id="controls"><div class="group"><button class="control" id="left">◀</button><button class="control" id="right">▶</button></div><div class="group"><button class="control" id="brake">FRENO</button><button class="control" id="gas">ACELERAR</button></div></div></div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script><script>
+(()=>{const root=document.getElementById('game'),msg=document.getElementById('message'),sub=document.getElementById('submessage'),startBtn=document.getElementById('start'),speedEl=document.getElementById('speed'),infoEl=document.getElementById('raceInfo');if(!window.THREE){msg.textContent='No se pudo cargar el motor 3D';sub.textContent='Comprueba tu conexión a Internet';startBtn.style.display='none';return}
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x83d5ec);scene.fog=new THREE.Fog(0x83d5ec,100,230);const camera=new THREE.PerspectiveCamera(66,innerWidth/innerHeight,.1,400);const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;root.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xdaf7ff,0x557247,1.65));const sun=new THREE.DirectionalLight(0xfff2d5,2.25);sun.position.set(-45,70,35);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-100;sun.shadow.camera.right=100;sun.shadow.camera.top=100;sun.shadow.camera.bottom=-100;scene.add(sun);
+const mat=(c,r=.8,m=0)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});const sand=mat(0xe7cf91),grass=mat(0x4b9d4c),road=mat(0x343a40,.96),white=mat(0xf4f0df),red=mat(0xe84b3c),dark=mat(0x202a30),leaf=mat(0x168b4d),wood=mat(0x86552d),yellow=mat(0xffd65b);
+const sea=new THREE.Mesh(new THREE.PlaneGeometry(600,600),mat(0x159dbb));sea.rotation.x=-Math.PI/2;sea.position.y=-.5;scene.add(sea);const island=new THREE.Mesh(new THREE.CircleGeometry(105,96),sand);island.rotation.x=-Math.PI/2;island.position.y=-.22;scene.add(island);const field=new THREE.Mesh(new THREE.CircleGeometry(86,96),grass);field.rotation.x=-Math.PI/2;field.position.y=-.18;scene.add(field);
+const pts=[];for(let i=0;i<240;i++){const a=i/240*Math.PI*2;pts.push(new THREE.Vector3(Math.cos(a)*43,0,Math.sin(a)*28))}const curve=new THREE.CatmullRomCurve3(pts,true,'catmullrom',.12),roadPoints=curve.getPoints(480),positions=[],indices=[];for(let i=0;i<roadPoints.length;i++){const p=roadPoints[i],t=curve.getTangent(i/480).normalize(),side=new THREE.Vector3(-t.z,0,t.x);for(const s of [-1,1]){const v=p.clone().addScaledVector(side,s*10);positions.push(v.x,.02,v.z)}if(i<roadPoints.length-1){const k=i*2;indices.push(k,k+1,k+2,k+1,k+3,k+2)}}const rg=new THREE.BufferGeometry();rg.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));rg.setIndex(indices);rg.computeVertexNormals();const rm=new THREE.Mesh(rg,road);rm.receiveShadow=true;scene.add(rm);
+for(let i=0;i<roadPoints.length-1;i+=3){const p=roadPoints[i],t=curve.getTangent(i/480).normalize(),side=new THREE.Vector3(-t.z,0,t.x),rot=Math.atan2(t.x,t.z);for(const s of [-1,1]){const curb=new THREE.Mesh(new THREE.BoxGeometry(1.8,.18,.48),Math.floor(i/3)%2?white:red);curb.position.copy(p).addScaledVector(side,s*10.15);curb.position.y=.16;curb.rotation.y=rot;scene.add(curb)}if(i%12===0){const dash=new THREE.Mesh(new THREE.BoxGeometry(.18,.035,2.1),yellow);dash.position.set(p.x,.07,p.z);dash.rotation.y=rot;scene.add(dash)}}
+const sp=curve.getPointAt(0),st=curve.getTangentAt(0).normalize(),finish=new THREE.Group();finish.position.set(sp.x,.12,sp.z);finish.rotation.y=Math.atan2(st.x,st.z);for(let i=0;i<12;i++){const tile=new THREE.Mesh(new THREE.BoxGeometry(1.1,.07,1.25),i%2?dark:white);tile.position.set((i-5.5)*1.25,0,0);finish.add(tile)}scene.add(finish);
+function palm(x,z,s=1){const g=new THREE.Group();g.position.set(x,0,z);g.scale.setScalar(s);const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.2,.36,5.2,8),wood);trunk.position.y=2.6;trunk.rotation.z=.08;trunk.castShadow=true;g.add(trunk);for(let j=0;j<8;j++){const a=j*Math.PI/4,l=new THREE.Mesh(new THREE.ConeGeometry(.42,4.4,6),leaf);l.position.set(Math.cos(a)*1.45,4.9,Math.sin(a)*1.45);l.rotation.z=-Math.cos(a)*.8;l.rotation.x=Math.sin(a)*.8;g.add(l)}scene.add(g)}for(let i=0;i<42;i++){const a=i/42*Math.PI*2,rad=61+(i%3)*5;palm(Math.cos(a)*rad,Math.sin(a)*rad*.72,.75+(i%4)*.1)}for(let i=0;i<18;i++){const a=i*2.17,rad=76+(i%4)*4;const rock=new THREE.Mesh(new THREE.DodecahedronGeometry(1.2+(i%3)*.5),mat(0x82918a));rock.position.set(Math.cos(a)*rad,.5,Math.sin(a)*rad*.72);rock.castShadow=true;scene.add(rock)}
+const stand=new THREE.Group();stand.position.set(-58,0,-3);const base=new THREE.Mesh(new THREE.BoxGeometry(13,3,7),mat(0x31516a));base.position.y=1.5;stand.add(base);for(let i=0;i<3;i++){const row=new THREE.Mesh(new THREE.BoxGeometry(13,.35,1.7),mat(i%2?0xf1c34b:0xe95b45));row.position.set(0,2.2+i*.65,-2+i*1.4);stand.add(row)}scene.add(stand);
+function makeCar(color){const g=new THREE.Group(),paint=mat(color,.38,.18),glass=mat(0x17394b,.22,.25),rubber=mat(0x14191d),metal=mat(0xb9c4c8,.32,.55);const chassis=new THREE.Mesh(new THREE.BoxGeometry(2.15,.48,3.65),dark);chassis.position.y=.72;chassis.castShadow=true;g.add(chassis);const body=new THREE.Mesh(new THREE.BoxGeometry(2.12,.7,3.25),paint);body.position.y=1.02;body.castShadow=true;g.add(body);const hood=new THREE.Mesh(new THREE.BoxGeometry(1.85,.23,1.12),paint);hood.position.set(0,1.42,1.02);g.add(hood);const cabin=new THREE.Mesh(new THREE.BoxGeometry(1.55,.83,1.55),glass);cabin.position.set(0,1.58,-.12);cabin.castShadow=true;g.add(cabin);const roof=new THREE.Mesh(new THREE.BoxGeometry(1.68,.16,1.62),paint);roof.position.set(0,2.02,-.12);g.add(roof);const bumper=new THREE.Mesh(new THREE.BoxGeometry(2.28,.2,.25),dark);bumper.position.set(0,.7,1.83);g.add(bumper);for(const x of [-.72,.72]){const lamp=new THREE.Mesh(new THREE.BoxGeometry(.38,.19,.08),mat(0xfff3b0,.25));lamp.position.set(x,1.22,1.68);g.add(lamp)}for(const x of [-.83,.83]){const bar=new THREE.Mesh(new THREE.CylinderGeometry(.055,.055,1.45,8),dark);bar.position.set(x,1.67,-.15);g.add(bar)}const wheels=[];for(const x of [-1.12,1.12])for(const z of [-1.12,1.12]){const w=new THREE.Mesh(new THREE.CylinderGeometry(.43,.43,.32,18),rubber);w.rotation.z=Math.PI/2;w.position.set(x,.58,z);w.castShadow=true;g.add(w);wheels.push(w);const hub=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,.34,12),metal);hub.rotation.z=Math.PI/2;hub.position.set(x,.58,z);g.add(hub)}const spoiler=new THREE.Mesh(new THREE.BoxGeometry(1.7,.12,.38),dark);spoiler.position.set(0,1.65,-1.72);g.add(spoiler);return {group:g,wheels}}
+const player=makeCar(0xe53935);scene.add(player.group);const ai=[makeCar(0x2478d5),makeCar(0xffc52f)];ai.forEach(c=>scene.add(c.group));
+function pose(car,p,lane){const u=((p%1)+1)%1,q=curve.getPointAt(u),t=curve.getTangentAt(u).normalize(),side=new THREE.Vector3(-t.z,0,t.x);car.group.position.copy(q).addScaledVector(side,lane);car.group.position.y=.04;car.group.rotation.y=Math.atan2(t.x,t.z)}
+const state={running:false,playerProgress:0,velocity:0,lateral:0,steer:0,lap:1,elapsed:0,aiProgress:[.012,.025],aiSpeed:[20.5,19.2]},keys={left:false,right:false,gas:false,brake:false};function bind(id,k){const el=document.getElementById(id),down=e=>{e.preventDefault();keys[k]=true},up=e=>{e.preventDefault();keys[k]=false};el.addEventListener('pointerdown',down);['pointerup','pointercancel','pointerleave'].forEach(v=>el.addEventListener(v,up))}bind('left','left');bind('right','right');bind('gas','gas');bind('brake','brake');
+const trackLength=curve.getLength();function startRace(){state.running=true;state.playerProgress=0;state.velocity=0;state.lateral=0;state.steer=0;state.lap=1;state.elapsed=0;state.aiProgress=[.012,.025];pose(player,0,0);pose(ai[0],.012,-3.5);pose(ai[1],.025,3.5);startBtn.style.display='none';msg.textContent='¡A CORRER!';sub.textContent='¡SALIDA!'}startBtn.addEventListener('click',startRace);const clock=new THREE.Clock();
+function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);if(state.running){state.elapsed+=dt;state.velocity+= (keys.gas?26:0)*dt;state.velocity-=(keys.brake?39:0)*dt;state.velocity-=state.velocity*dt*(keys.gas?.22:.72);state.velocity=THREE.MathUtils.clamp(state.velocity,0,36);const desired=keys.left?-1:keys.right?1:0;state.steer=THREE.MathUtils.damp(state.steer,desired,5.5,dt);
+ // Corrected: left input shifts toward the left side of the road, right toward the right.
+ state.lateral=THREE.MathUtils.clamp(state.lateral-state.steer*dt*(2+state.velocity*.19),-7.2,7.2);if(!desired)state.lateral=THREE.MathUtils.damp(state.lateral,0,.22,dt);const offroad=Math.abs(state.lateral)>6.1,actualSpeed=state.velocity*(offroad?.58:1);state.playerProgress+=actualSpeed*dt/trackLength;const u=state.playerProgress%1,q=curve.getPointAt(u),t=curve.getTangentAt(u).normalize(),side=new THREE.Vector3(-t.z,0,t.x);player.group.position.copy(q).addScaledVector(side,state.lateral);player.group.position.y=.04;player.group.rotation.y=Math.atan2(t.x,t.z)+state.steer*.13;player.wheels.forEach(w=>w.rotation.x+=actualSpeed*dt*1.8);
+ state.aiProgress[0]+=state.aiSpeed[0]*dt/trackLength;state.aiProgress[1]+=state.aiSpeed[1]*dt/trackLength;pose(ai[0],state.aiProgress[0],-3.5);pose(ai[1],state.aiProgress[1],3.5);ai.forEach((c,i)=>c.wheels.forEach(w=>w.rotation.x+=state.aiSpeed[i]*dt*1.8));
+ const all=[{p:state.playerProgress,id:0},{p:state.aiProgress[0],id:1},{p:state.aiProgress[1],id:2}].sort((a,b)=>b.p-a.p),position=all.findIndex(x=>x.id===0)+1,currentLap=Math.min(3,Math.floor(state.playerProgress)+1);state.lap=currentLap;speedEl.innerHTML=Math.round(actualSpeed*3.6)+' <small>KM/H</small>';infoEl.innerHTML='VUELTA '+currentLap+' / 3<br>POSICIÓN '+position+' / 3';msg.textContent='';if(state.playerProgress>=3){state.running=false;msg.textContent=position===1?'¡HAS GANADO!':'¡CARRERA TERMINADA!';sub.textContent=position===1?'¡CAMPEÓN DE TURBO ISLAND!':'¡BUEN INTENTO!';startBtn.textContent='VOLVER A CORRER';startBtn.style.display='block'}else if(state.aiProgress.some(p=>p>=3)){state.running=false;msg.textContent='¡LOS RIVALES HAN GANADO!';sub.textContent='Inténtalo otra vez';startBtn.textContent='REINTENTAR';startBtn.style.display='block'}}
+ const angle=player.group.rotation.y,forward=new THREE.Vector3(Math.sin(angle),0,Math.cos(angle)),target=player.group.position.clone().add(new THREE.Vector3(0,5.2,0)).addScaledVector(forward,-11.5);camera.position.lerp(target,.105);camera.lookAt(player.group.position.clone().add(new THREE.Vector3(0,1.25,0)).addScaledVector(forward,5));renderer.render(scene,camera)}
+pose(player,0,0);pose(ai[0],.012,-3.5);pose(ai[1],.025,3.5);animate();addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)})})();
+</script></body></html>

@@ -1,16 +1,20 @@
-# Turbo Island 3D
+# Turbo Island 3D v0.2
 
-Primera versión de un juego arcade de carreras 3D para navegador móvil.
+Actualización basada en las pruebas de la versión 0.1.
 
-## Archivos
-- `index.html`: juego completo.
+## Cambios
+- Dirección izquierda/derecha corregida.
+- Rivales con progreso y velocidades independientes.
+- Carrera de tres vueltas y condición de finalización.
+- Buggy rediseñado con ruedas, luces, barras y cámara suavizada.
+- Circuito tropical con bordillos, línea de salida/meta y decoraciones.
+- Controles táctiles.
 
-## Cómo probarlo
-1. Sube el contenido de esta carpeta a un repositorio de GitHub.
-2. Activa GitHub Pages desde Settings → Pages, usando la rama principal y la carpeta raíz.
-3. Abre la dirección de GitHub Pages desde el navegador del teléfono.
+## Actualizar GitHub desde Termux
+Reemplaza el `index.html` anterior por el de esta versión y ejecuta:
+`git add index.html README.md`
+`git commit -m "Turbo Island 3D v0.2"`
+`git push`
 
-## Importante
-- El juego utiliza Three.js desde jsDelivr, por lo que necesita conexión a Internet para cargar el motor 3D.
-- Esta es una primera versión: circuito ovalado, buggy rojo, dos rivales, cámara de seguimiento y controles táctiles.
-- Los controles también responden a pulsación mantenida.
+## Nota
+Three.js se carga desde jsDelivr; se necesita conexión a Internet. Versión experimental, sujeta a pruebas de rendimiento en el teléfono.
